@@ -309,7 +309,13 @@ function _currentSelectionElseCurrentForm(editor: vscode.TextEditor): getText.Se
 }
 
 function _currentTopLevelFormText(editor: vscode.TextEditor): getText.SelectionAndText {
-  return getText.currentTopLevelFormText(editor?.document, editor?.selections[0].active);
+  const text = getText.currentTopLevelFormText(editor?.document, editor?.selections[0].active);
+
+  // HACK: Clean every plumatic schema type-hint from code
+  // (s/defn my-fn :- s/Int [x :- s/Str] x) => (s/defn my-fn [x] x)
+  const cleanedText = text[1].replace(/:-\s.*\/\w+/g, '').replace(/\w+\/defn/g, 'defn');
+
+  return [text[0], cleanedText];
 }
 
 function _currentEnclosingFormText(editor: vscode.TextEditor): getText.SelectionAndText {
