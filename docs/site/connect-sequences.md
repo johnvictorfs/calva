@@ -44,8 +44,16 @@ A connect sequence configures the following:
     * `cljsLaunchBuilds`: The cljs builds to start/watch at Jack-in/connect.
     * `cljsDefaultBuild`: Which cljs build to attach to at the initial connect.
 * `jackInEnv`: An object with environment variables that will be merged with the global `calva.jackInEnv` and then applied to the Jack-in process. The merge is very similar to how Clojure's `merge` works. So for any common keys between the global setting and this one, the ones from this setting will win.
+* `extraNReplMiddleware`: Array of strings of the fully qualified names of extra middleware that should be applied to the nREPL server when started.
 
 The [Calva built-in sequences](https://github.com/BetterThanTomorrow/calva/blob/published/src/nrepl/connectSequence.ts) also use this format, check them out to get a clearer picture of how these settings work.
+
+!!! Note "How sequence configurations are merged"
+    The sequence configuration, `calva.replConnectSequences` is an array and the sequences in the array will be listed and processed in the order they appear. However, you can configure connect sequences in several places, even if they make most sense on the Workspace level. The configurations are merged in the following order:
+    
+    1. Workspace Folder settings
+    1. Workspace settings
+    1. User settings
 
 !!! Note "Force the project type menu to show"
     The convenience of `autoSelectForJackIn/Connect` can be an inconvenience when you want to use another project type/sequence for a project. For this reason, the `calva.connect` and `calva.jackIn` can be provided with an option `disableAutoSelect`, which forces the project root and project type menus to show. See [Options for the Connect Command](connect.md#options-for-the-jack-in-command) and [Options for the Jack-in Command](connect.md#options-for-the-connect-command) for more on this.

@@ -4,6 +4,56 @@ Changes to Calva.
 
 ## [Unreleased]
 
+## [2.0.479] - 2024-10-01
+
+- [Autostart REPL in created projects, also when created in the current folder](https://github.com/BetterThanTomorrow/calva/issues/2644)
+
+## [2.0.478] - 2024-09-30
+
+- [Add `extraNReplMiddleware` to `connectSequence`](https://github.com/BetterThanTomorrow/calva/issues/1691)
+
+## [2.0.477] - 2024-09-29
+
+- Fix: [Global custom repl command keys override workspace dittos, should be the other way around](https://github.com/BetterThanTomorrow/calva/issues/2640)
+
+## [2.0.476] - 2024-09-28
+
+- Fix: [Formatting and some pretty printing croaks on new Clojure 1.12.0 syntax](https://github.com/BetterThanTomorrow/calva/issues/2637)
+
+## [2.0.475] - 2024-09-24
+
+- Fix: [Can't start REPL in lein projects with backtick on project.clj](https://github.com/BetterThanTomorrow/calva/issues/2633)
+
+## [2.0.474] - 2024-09-22
+
+- [Synchronize the file extensions for Calva and Calva Spritz](https://github.com/BetterThanTomorrow/calva/issues/2629)
+- Fix: [Terminal output pretty printing fails when using `printerFn` pretty print option](https://github.com/BetterThanTomorrow/calva/issues/2630)
+
+## [2.0.473] - 2024-09-21
+
+- [Add some different types of comment styles when evaluating to comment](https://github.com/BetterThanTomorrow/calva/issues/2626)
+
+## [2.0.472] - 2024-09-15
+
+- [Preserve whitespaces format of evaluation error in tooltip](https://github.com/BetterThanTomorrow/calva/issues/2623)
+
+## [2.0.471] - 2024-09-12
+
+- [Trim leading newlines from the result/error string before inline display](https://github.com/BetterThanTomorrow/calva/issues/2617)
+
+## [2.0.470] - 2024-09-11
+
+- Bump deps.clj to v1.12.0.1479
+
+## [2.0.469] - 2024-09-10
+
+- Fix: [Windows – Jack-in for shadow-cljs fails to start with "Error: spawn EINVAL" on the latest VS Code version](https://github.com/BetterThanTomorrow/calva/issues/2616)
+
+## [2.0.468] - 2024-09-03
+
+- Bump deps.clj to v1.11.4.1474
+- [Prioritize Workspace configured connect sequences over User configured dittos](https://github.com/BetterThanTomorrow/calva/issues/2606)
+
 ## [2.0.467] - 2024-07-14
 
 - Fix: [Test explorer creates a test case each time a keystroke is registered](https://github.com/BetterThanTomorrow/calva/issues/2530)
