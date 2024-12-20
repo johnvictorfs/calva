@@ -329,7 +329,7 @@ function _currentTopLevelFormText(editor: vscode.TextEditor): getText.SelectionA
  *                         y :- DateTime] x) => (defn my-fn [x y] x)
  * ```
  */
-function _cleanTypeHints(code) {
+function _cleanTypeHints(code: string): string {
   // First remove the return type hint after function name
   let result = code.replace(/:-\s+\S+\s+(?=\[)/, ' ');
   
