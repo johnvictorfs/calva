@@ -325,34 +325,29 @@ function _currentTopLevelFormText(editor: vscode.TextEditor): getText.SelectionA
 /**
  * HACK: Clean every plumatic schema type-hint from code
  * ```clojure
- * (s/defn my-fn :- s/Int [x :- s/Str
- *                         y :- DateTime] x) => (defn my-fn [x y] x)
+ * (s/defn my-fn :- s/Int [x :- s/Str y :- DateTime] x) => (defn my-fn [x y] x)
  * ```
  */
 function _cleanTypeHints(code: string): string {
-  // First remove the return type hint after function name
-  let result = code.replace(/:-\s+\S+\s+(?=\[)/, ' ');
+  // Step 1: Replace s/defn with defn
+  let result = code.replace(/\w+\/defn/, 'defn');
   
-  // Handle parameter type hints by working with the parameter vector content
-  const startBracket = result.indexOf('[');
-  const endBracket = result.lastIndexOf(']');
+  // Step 2: Remove the return type hint
+  result = result.replace(/:-\s+\S+(?=\s*\[)/, '');
   
-  if (startBracket !== -1 && endBracket !== -1) {
-    const beforeParams = result.substring(0, startBracket + 1);
-    const params = result.substring(startBracket + 1, endBracket);
-    const afterParams = result.substring(endBracket);
-    
-    // Remove type hints from parameters
-    const cleanParams = params.replace(/:-\s+\S+(\s+|$)/g, ' ').trim();
-    
-    result = beforeParams + cleanParams + afterParams;
+  // Step 3: Find and clean parameter type hints
+  const paramVectorMatch = result.match(/\[([\s\S]*?)\]/);
+  if (paramVectorMatch) {
+    const params = paramVectorMatch[1];
+    // Remove all type hints from parameters while preserving params
+    const cleanedParams = params.replace(/:-\s+\S+/g, '');
+    result = result.replace(paramVectorMatch[0], `[${cleanedParams}]`);
   }
   
-  // Replace namespace qualified defn
-  result = result.replace(/\w+\/defn/, 'defn');
-  
-  // Clean up extra whitespace
-  return result.replace(/\s+/g, ' ').trim();
+  // Step 4: Clean up whitespace
+  result = result.replace(/\s+/g, ' ').trim();
+
+  return result;
 }
 
 function _currentEnclosingFormText(editor: vscode.TextEditor): getText.SelectionAndText {
@@ -373,6 +368,13 @@ function evaluateSelectionReplace(document = {}, options = {}) {
     offerToConnect();
   }
 }
+
+`(s/defn my-test :- Instant
+  [b :- Instant
+   c :- s/Str]
+  (let [now (Instant/now)]
+    (println "now: " now)
+    now))`
 
 function validateCommentStyle(commentStyle: string) {
   if (!['line', 'ignore', 'rcf'].includes(commentStyle)) {
