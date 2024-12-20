@@ -316,11 +316,43 @@ function _currentSelectionElseCurrentForm(editor: vscode.TextEditor): getText.Se
 function _currentTopLevelFormText(editor: vscode.TextEditor): getText.SelectionAndText {
   const text = getText.currentTopLevelFormText(editor?.document, editor?.selections[0].active);
 
-  // HACK: Clean every plumatic schema type-hint from code
-  // (s/defn my-fn :- s/Int [x :- s/Str] x) => (s/defn my-fn [x] x)
-  const cleanedText = text[1].replace(/:-\s.*\/\w+/g, '').replace(/\w+\/defn/g, 'defn');
+  
+  const cleanedText = _cleanTypeHints(text[1]);
 
   return [text[0], cleanedText];
+}
+
+/**
+ * HACK: Clean every plumatic schema type-hint from code
+ * ```clojure
+ * (s/defn my-fn :- s/Int [x :- s/Str
+ *                         y :- DateTime] x) => (defn my-fn [x y] x)
+ * ```
+ */
+function _cleanTypeHints(code) {
+  // First remove the return type hint after function name
+  let result = code.replace(/:-\s+\S+\s+(?=\[)/, ' ');
+  
+  // Handle parameter type hints by working with the parameter vector content
+  const startBracket = result.indexOf('[');
+  const endBracket = result.lastIndexOf(']');
+  
+  if (startBracket !== -1 && endBracket !== -1) {
+    const beforeParams = result.substring(0, startBracket + 1);
+    const params = result.substring(startBracket + 1, endBracket);
+    const afterParams = result.substring(endBracket);
+    
+    // Remove type hints from parameters
+    const cleanParams = params.replace(/:-\s+\S+(\s+|$)/g, ' ').trim();
+    
+    result = beforeParams + cleanParams + afterParams;
+  }
+  
+  // Replace namespace qualified defn
+  result = result.replace(/\w+\/defn/, 'defn');
+  
+  // Clean up extra whitespace
+  return result.replace(/\s+/g, ' ').trim();
 }
 
 function _currentEnclosingFormText(editor: vscode.TextEditor): getText.SelectionAndText {
