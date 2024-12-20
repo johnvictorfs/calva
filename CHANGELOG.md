@@ -4,6 +4,22 @@ Changes to Calva.
 
 ## [Unreleased]
 
+## [2.0.482] - 2024-12-03
+
+- Fix: [Added 'replace-refer-all-with-alias' & 'replace-refer-all-with-refer' actions to calva.](https://github.com/BetterThanTomorrow/calva/issues/2667) 
+
+## [2.0.481] - 2024-10-29
+
+- [Add extension when contexts for Calva states such as project root, session type, ns](https://github.com/BetterThanTomorrow/calva/issues/2652)
+- Fix: [Calva internals: The `backwardSexp` function can't handle skipping ignored forms, even though it says it can](https://github.com/BetterThanTomorrow/calva/issues/2657)
+- Fix: [Keep support for evaluating top level form in ignored forms when at top level](https://github.com/BetterThanTomorrow/calva/issues/2655)
+- [Enable separate styling for top level ignored forms](https://github.com/BetterThanTomorrow/calva/issues/2660)
+
+## [2.0.480] - 2024-10-21
+
+- Fix: [Custom command snippets use the wrong ns when repl sessions types do not match](https://github.com/BetterThanTomorrow/calva/issues/2653)
+- Fix: [ns inner blocks are kept on the same line by default when using the clean ns command](https://github.com/BetterThanTomorrow/calva/issues/2648)
+
 ## [2.0.479] - 2024-10-01
 
 - [Autostart REPL in created projects, also when created in the current folder](https://github.com/BetterThanTomorrow/calva/issues/2644)

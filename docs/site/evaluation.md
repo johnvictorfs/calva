@@ -35,7 +35,7 @@ Some of the commands also let you choose what should happen with the results:
     * The `line` style is the default.
     * The `ignore` style will put an ignore marker (`#_`) before the result.
     * The `rcf` style will wrap the result in a rich comment form ( `(comment ...)`).
-    
+
     Here are some example keybindings for using the different comment styles with the **Evaluate Top Level Form (defun) to Comment** command:
 
     ```jsonc
@@ -107,6 +107,8 @@ Default shortcut for evaluating the current top level form: `alt+enter`.
 The **current top-level form** means top-level in a structural sense. It is _not_ the topmost form in the file. Typically in a Clojure file you will find `def` and `defn` (and `defwhatever`) forms at the top level, which also is one major intended use for evaluating top level form: _to define and redefine variables_. However, Calva does not check the contents of the form in order to determine it as a top-level forms: _all forms not enclosed in any other form are top level forms_.
 
 An ”exception” is introduced by the `comment` form. It will create a new top level context, so that any forms immediately inside a `(comment ...)` form will be considered top-level by Calva. This is to support a workflow with what is often referred to the [Rich Comments](rich-comments.md).
+
+A special case is ignored forms (using the `#_` marker) at the top level. They will always be selected as top level forms separately from their ignore marker, enabling evaluating them as top level forms. Similar to Rich Comments.
 
 At the top level the selection of which form is the current top level form follows the same rules as those for [the current form](#current-form).
 

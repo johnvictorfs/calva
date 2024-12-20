@@ -139,5 +139,8 @@
       "afterCL]ReplJackInCode": ["(println :hello)", "(println :world!)"],
       "cljsType": "none"
     }
-  ]
+  ],
+  "calva.highlight.ignoredTopLevelFormStyle": {
+    "textDecoration": "none; text-shadow: 2px 2px 5px rgba(255, 215, 0, 0.75)"
+  }
 }
