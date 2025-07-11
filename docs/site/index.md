@@ -16,7 +16,7 @@ description: Learn how to use Calva, a rich IDE for enjoyable and productive Clo
 
 [Calva](https://marketplace.visualstudio.com/items?itemName=betterthantomorrow.calva) is an integrated, REPL powered, development environment for enjoyable and productive [Clojure](https://clojure.org) and [ClojureScript](https://clojurescript.org) programming in [Visual Studio Code](https://code.visualstudio.com). It is [feature rich](#features) and turnkey. A lot of effort has been put into making Calva a good choice if you are new to Clojure. [Calva is open source](https://github.com/BetterThanTomorrow/calva) and free to use.
 
-[![#calva chat on Zulip](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://clojurians.zulipchat.com/#narrow/channel/151858-calva)
+[![chat - #clojure](https://img.shields.io/badge/chat-%23calva-db9550?style=for-the-badge&logo=zulip)](https://clojurians.zulipchat.com/#narrow/channel/151858-calva)
 
 ## Getting Started
 
@@ -39,19 +39,9 @@ I'm glad you asked! Please see [How to Contribute](contribute.md) and [The Tao o
 
 <div style="display:flex; flex: 1; flex-direction: row; justify-content: flex-start; flex-wrap:wrap; gap: 30px; margin-bottom: 16px;">
 
-<div style="margin-right: 30px">
-<div><a href="https://liftoff.io" title="Scale your growth on mobile"><img src="https://liftoff.io/wp-content/themes/liftoff/images/logo-blue.png" style="height: 80px;" alt="Liftoff"/></a></div>
-<div><i>Scale your growth on mobile</i></div>
-</div>
-
 <div>
 <div><a href="https://cognitect.com" title="MAKE. DO. SHIP."><img src="https://cognitect.com/assets/cognitect-logo-horizontal.svg" style="height: 80px;" alt="Cognitect"/></a></div>
 <div><i>MAKE. DO. SHIP.</i></div>
-</div>
-
-<div style="margin-right: 30px">
-<div><a href="https://www.thortech-solutions.com/" title="ThorTech"><img src="https://www.thortech-solutions.com/wp-content/uploads/2022/04/ThorTechSolutionsLogo-01-copy-1.png" style="height: 80px;" alt="ThorTech Solutions"/></a></div>
-<!--<div><i>Grow your Clojure & ClojureScript business</i></div>-->
 </div>
 
 </div>

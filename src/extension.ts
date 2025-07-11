@@ -31,7 +31,13 @@ import * as replHistory from './repl-window/repl-history';
 import * as config from './config';
 import * as snippets from './custom-snippets';
 import * as whenContexts from './when-contexts';
-import { setStateValue } from '../out/cljs-lib/cljs-lib';
+import {
+  setStateValue,
+  initializeCljs,
+  clearReplOutputView,
+  registerOutputViewWebviewSerializer,
+  showReplOutputWebviewPanel,
+} from '../out/cljs-lib/cljs-lib';
 import * as edit from './edit';
 import * as nreplLogging from './nrepl/logging';
 import * as converters from './converters';
@@ -43,12 +49,12 @@ import { capitalize } from './utilities';
 import * as overrides from './overrides';
 import * as lsp from './lsp';
 import * as fiddleFiles from './fiddle-files';
+import * as flareHandler from './flare-handler';
 import * as output from './results-output/output';
 import * as inspector from './providers/inspector';
 
 function onDidChangeEditorOrSelection(editor: vscode.TextEditor) {
   replHistory.setReplHistoryCommandsActiveContext(editor);
-  whenContexts.setCursorContextIfChanged(editor);
 }
 
 function setKeybindingsEnabledContext() {
@@ -78,6 +84,13 @@ function initializeState() {
 async function activate(context: vscode.ExtensionContext) {
   console.info('Calva activate START');
 
+  // Store a reference to the vscode API in the cljs so it can call the API using that reference,
+  // because requiring the vscode API poses issues with being able to test the cljs lib.
+  // We cannot run unit tests on code that imports the vscode API, because it's only available at runtime.
+  initializeCljs(vscode, context);
+
+  registerOutputViewWebviewSerializer();
+
   initializeState();
   state.setExtensionContext(context);
   state.initDepsEdnJackInExecutable();
@@ -90,6 +103,9 @@ async function activate(context: vscode.ExtensionContext) {
   });
   inspectorDataProvider.treeView = inspectorTreeView;
   vscode.window.registerFileDecorationProvider(new inspector.InspectorItemDecorationProvider());
+
+  // Initialize flare webview provider for sidebar
+  flareHandler.registerFlareWebviewProvider(context);
 
   overrides.activate();
 
@@ -219,6 +235,7 @@ async function activate(context: vscode.ExtensionContext) {
   // COMMANDS
   const commands = {
     clearInlineResults: annotations.clearAllEvaluationDecorations,
+    clearReplOutputView: clearReplOutputView,
     clearReplHistory: replHistory.clearHistory,
     connect: connector.connectCommand,
     connectNonProjectREPL: () => {
@@ -262,10 +279,7 @@ async function activate(context: vscode.ExtensionContext) {
     prettyPrintReplaceCurrentForm: edit.prettyPrintReplaceCurrentForm,
     printClojureDocsToOutputWindow: clojureDocs.printClojureDocsToOutput,
     printClojureDocsToRichComment: clojureDocs.printClojureDocsToRichComment,
-    printLastStacktrace: () => {
-      outputWindow.printLastStacktrace();
-      output.replWindowAppendPrompt();
-    },
+    printLastStacktrace: output.printLastStacktrace,
     printTextToOutputCommand: clojureDocs.printTextToOutputCommand,
     printTextToRichCommentCommand: clojureDocs.printTextToRichCommentCommand,
     refresh: refresh.refresh,
@@ -290,6 +304,7 @@ async function activate(context: vscode.ExtensionContext) {
     showOutputWindow: outputWindow.revealResultsDoc, // backwards compatibility
     showOutputChannel: output.showOutputChannel,
     showOutputTerminal: output.showOutputTerminal,
+    showReplOutputView: showReplOutputWebviewPanel,
     showResultOutputDestination: output.showResultOutputDestination,
     showPreviousReplHistoryEntry: replHistory.showPreviousReplHistoryEntry,
     startJoyrideReplAndConnect: async () => {
@@ -420,6 +435,57 @@ async function activate(context: vscode.ExtensionContext) {
 
   Object.entries(languageProviders).forEach(registerLangProvider);
 
+  // Coordinate event handling that may affect the 'when' cursor contexts.
+  // Update context upon editor change, selection change, or text change
+  // (e.g., upon deleting a comment-defining semicolon without moving the point)
+  // But try not to repeatedly update context in response to the same essential event
+  // (e.g., most text changes, which also move the point)
+  // without depending on the order of TextDocumentChangeEvent or TextEditorSelectionChangeEvent
+  let contextSettingEditor: vscode.TextEditor = undefined;
+  let contextSettingCircumstances = undefined;
+  function contextSettingOnChangeActiveTextEditor(editor: vscode.TextEditor) {
+    if (whenContexts.setCursorContextIfChanged(editor)) {
+      if (editor?.document) {
+        const circumstances = {
+          version: editor.document.version,
+          active: editor.selection.active,
+        };
+        contextSettingEditor = editor;
+        contextSettingCircumstances = circumstances;
+      }
+    }
+  }
+  function contextSettingOnTextDocumentChangeEvent(dce: vscode.TextDocumentChangeEvent) {
+    if (contextSettingEditor) {
+      const circumstances = {
+        version: dce.document.version,
+        active: contextSettingEditor.selection.active,
+      };
+      if (
+        !(
+          (contextSettingEditor && dce.document !== contextSettingEditor.document) ||
+          circumstances == contextSettingCircumstances
+        )
+      ) {
+        whenContexts.setCursorContextIfChanged(contextSettingEditor);
+        contextSettingCircumstances = circumstances;
+      }
+    }
+  }
+  function contextSettingOnChangeTextEditorSelection(tsce: vscode.TextEditorSelectionChangeEvent) {
+    const circumstances = {
+      version: tsce.textEditor.document.version,
+      active: tsce.selections[0].active,
+    };
+    if (
+      !(contextSettingEditor === tsce.textEditor && circumstances == contextSettingCircumstances)
+    ) {
+      whenContexts.setCursorContextIfChanged(tsce.textEditor);
+      contextSettingEditor = tsce.textEditor;
+      contextSettingCircumstances = circumstances;
+    }
+  }
+
   //EVENTS
   const onDidEvents = {
     workspace: {
@@ -441,7 +507,10 @@ async function activate(context: vscode.ExtensionContext) {
           void testRunner.runNamespaceTests(testController, document);
         }
       },
-      changeTextDocument: annotations.onDidChangeTextDocument,
+      changeTextDocument: (e: vscode.TextDocumentChangeEvent) => {
+        annotations.onDidChangeTextDocument(e);
+        contextSettingOnTextDocumentChangeEvent(e);
+      },
       closeTextDocument: (document) => {
         if (outputWindow.isResultsDoc(document)) {
           outputWindow.setContextForReplWindowActive(false);
@@ -458,8 +527,12 @@ async function activate(context: vscode.ExtensionContext) {
       changeActiveTextEditor: (editor) => {
         status.update();
         onDidChangeEditorOrSelection(editor);
+        contextSettingOnChangeActiveTextEditor(editor);
       },
-      changeTextEditorSelection: (event) => onDidChangeEditorOrSelection(event.textEditor),
+      changeTextEditorSelection: (event) => {
+        onDidChangeEditorOrSelection(event.textEditor);
+        contextSettingOnChangeTextEditorSelection(event);
+      },
       changeVisibleTextEditors: (editors) => {
         if (!editors.some((editor) => outputWindow.isResultsDoc(editor.document))) {
           outputWindow.setContextForReplWindowActive(false);

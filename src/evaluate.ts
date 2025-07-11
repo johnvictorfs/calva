@@ -10,7 +10,7 @@ import * as outputWindow from './repl-window/repl-doc';
 import * as namespace from './namespace';
 import * as replHistory from './repl-window/repl-history';
 import { formatAsLineComments } from './results-output/util';
-import { getStateValue } from '../out/cljs-lib/cljs-lib';
+import { getStateValue, appendStackTraceToReplOutputWebview } from '../out/cljs-lib/cljs-lib';
 import { getConfig } from './config';
 import * as replSession from './nrepl/repl-session';
 import * as getText from './util/get-text';
@@ -19,6 +19,7 @@ import * as output from './results-output/output';
 import * as inspector from './providers/inspector';
 import { resultAsComment } from './util/string-result';
 import { highlight } from './highlight/src/extension';
+import * as flareHandler from './flare-handler';
 
 let inspectorDataProvider: inspector.InspectorDataProvider;
 
@@ -130,7 +131,11 @@ async function evaluateCodeUpdatingUI(
       if (evaluationSendCodeToOutputWindow) {
         outputWindow.appendLine(code);
         if (output.getDestinationConfiguration().evalResults !== 'repl-window') {
-          output.appendClojureEval(code, { ns, replSessionType: session.replType });
+          output.appendClojureEval(code, {
+            ns,
+            replSessionType: session.replType,
+            outputCategory: 'evaluatedCode',
+          });
         }
       }
 
@@ -138,6 +143,8 @@ async function evaluateCodeUpdatingUI(
       value = util.stripAnsi(context.pprintOut || value);
 
       result = value;
+
+      flareHandler.inspect(value, (code) => evaluateCodeUpdatingUI(code, options, selection));
 
       if (showResult) {
         inspectorDataProvider.addItem(value, false, `[${session.replType}] ${ns}`);
@@ -239,6 +246,18 @@ async function evaluateCodeUpdatingUI(
             ns,
             replSessionType: session.replType,
           });
+          if (output.getDestinationConfiguration().evalOutput === 'output-view') {
+            session
+              .stacktrace()
+              .then((stacktrace) => {
+                if (stacktrace && stacktrace.stacktrace) {
+                  appendStackTraceToReplOutputWebview(stacktrace.stacktrace);
+                }
+              })
+              .catch((e) => {
+                console.error(`Failed fetching stacktrace: ${e.message}`);
+              });
+          }
         }
       }
     }
@@ -560,7 +579,7 @@ async function loadDocument(
     void vscode.window.showTextDocument(doc, { preview: false });
   }
   const fileType = util.getFileType(doc);
-  const [ns, _] = namespace.getNamespace(doc, doc.positionAt(0));
+  const [ns, nsForm] = namespace.getNamespace(doc, doc.positionAt(0));
   const session = replSession.getSession(util.getFileType(doc));
 
   if (doc && doc.languageId == 'clojure' && fileType != 'edn' && getStateValue('connected')) {
@@ -568,7 +587,7 @@ async function loadDocument(
       ? await namespace.getUriForNamespace(session, ns)
       : doc.uri;
     const filePath = docUri.path;
-    return await loadFile(filePath, ns, pprintOptions, fileType);
+    return await loadFile(filePath, ns, nsForm, pprintOptions, fileType);
   }
 }
 
@@ -586,6 +605,7 @@ async function loadFileCommand() {
 async function loadFile(
   filePath: string,
   ns: string,
+  nsForm: string,
   pprintOptions: PrettyPrintingOptions,
   fileType: string
 ) {
@@ -648,7 +668,13 @@ async function loadFile(
     replSession.updateReplSessionType();
     if (getConfig().autoEvaluateCode.onFileLoaded[fileType]) {
       output.appendLineOtherOut(`Evaluating \`autoEvaluateCode.onFileLoaded.${fileType}\``);
-      const context = customSnippets.makeContext(vscode.window.activeTextEditor, ns, ns, fileType);
+      const context = customSnippets.makeContext(
+        vscode.window.activeTextEditor,
+        ns,
+        ns,
+        nsForm,
+        fileType
+      );
       await customSnippets.evaluateSnippet(
         util.getActiveTextEditor(),
         getConfig().autoEvaluateCode.onFileLoaded[fileType],
@@ -772,6 +798,33 @@ async function evaluateInOutputWindow(code: string, sessionType: string, ns: str
   }
 }
 
+async function evaluateInCurrentEditor(
+  editor: vscode.TextEditor,
+  code: string,
+  sessionType: string,
+  ns: string,
+  options
+) {
+  const document = editor?.document;
+  if (document) {
+    const evalPos = editor.selection.active;
+    try {
+      const session = replSession.getSession(sessionType);
+      return await evaluateCodeUpdatingUI(code, {
+        ...options,
+        filePath: document.fileName,
+        session,
+        ns,
+        nsForm: options.nsForm ?? `(in-ns '${ns})`,
+        line: evalPos.line,
+        column: evalPos.character,
+      });
+    } catch (e) {
+      output.appendLineOtherErr('Evaluation failed.');
+    }
+  }
+}
+
 export default {
   interruptAllEvaluations,
   loadDocument,
@@ -793,6 +846,7 @@ export default {
   toggleEvaluationSendCodeToOutputWindow,
   instrumentTopLevelForm,
   evaluateInOutputWindow,
+  evaluateInCurrentEditor,
   evaluateReplWindowForm,
   initInspectorDataProvider,
 };

@@ -7,10 +7,45 @@ import * as cursorUtil from '../cursor-doc/utilities';
 import * as chalk from 'chalk';
 import * as ansiRegex from 'ansi-regex';
 import * as printer from '../printer';
+import {
+  appendToReplOutputWebview,
+  showReplOutputWebviewPanel,
+  appendStackTraceToReplOutputWebview,
+} from '../../out/cljs-lib/cljs-lib';
+import * as replSession from '../nrepl/repl-session';
 
 const customChalk = new chalk.Instance({ level: 3 });
 
-type OutputCategory = 'evalResults' | 'clojure' | 'evalOut' | 'evalErr' | 'otherOut' | 'otherErr';
+export interface SubscriberOutputMessage {
+  category: OutputCategory;
+  text: string;
+}
+
+type Listener = (msg: SubscriberOutputMessage) => void;
+const listeners = new Set<Listener>();
+
+/**
+ * Subscribe to every emitted output message. Returns an unsubscribe fn.
+ */
+export function subscribe(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function emit(msg: SubscriberOutputMessage) {
+  for (const listener of listeners) {
+    listener(msg);
+  }
+}
+
+export type OutputCategory =
+  | 'evalResults'
+  | 'evaluatedCode'
+  | 'clojure'
+  | 'evalOut'
+  | 'evalErr'
+  | 'otherOut'
+  | 'otherErr';
 
 type AppendOptions = {
   destination: OutputDestination;
@@ -21,6 +56,7 @@ type AppendOptions = {
 type AppendClojureOptions = {
   ns?: string;
   replSessionType?: string;
+  outputCategory?: OutputCategory;
 };
 
 const lightTheme = {
@@ -51,7 +87,7 @@ export interface AfterAppendCallback {
   (insertLocation: vscode.Location, newPosition?: vscode.Location): any;
 }
 
-export type OutputDestination = 'repl-window' | 'output-channel' | 'terminal';
+export type OutputDestination = 'repl-window' | 'output-channel' | 'terminal' | 'output-view';
 
 export type OutputDestinationConfiguration = {
   evalResults: OutputDestination;
@@ -134,6 +170,9 @@ export function showResultOutputDestination(preserveFocus = true) {
   if (getDestinationConfiguration().evalResults === 'terminal') {
     return showOutputTerminal(preserveFocus);
   }
+  if (getDestinationConfiguration().evalResults === 'output-view') {
+    return showReplOutputWebviewPanel(preserveFocus);
+  }
   return outputWindow.revealResultsDoc(preserveFocus);
 }
 
@@ -154,11 +193,12 @@ function messageContainsAnsi(message: string) {
 }
 
 // Used to decide if new result output should be prepended with a newline or not.
-// Also: For non-result output, whether the repl window output should be be printed as line comments.
+// Also: For non-result output, whether the repl window output should be printed as line comments.
 const didLastOutputTerminateLine: Record<OutputDestination, boolean> = {
   'repl-window': true,
   'output-channel': true,
   terminal: true,
+  'output-view': true,
 };
 
 let havePrintedLegacyReplWindowOutputMessage = false;
@@ -180,6 +220,7 @@ const lastInfoLineData: Record<OutputDestination, AppendClojureOptions> = {
   'repl-window': {},
   'output-channel': {},
   terminal: {},
+  'output-view': {},
 };
 
 function saveLastInfoLineData(destination: OutputDestination, options: AppendClojureOptions) {
@@ -207,6 +248,14 @@ function appendClojure(
   const destination = options.destination;
   const didLastTerminateLine = didLastOutputTerminateLine[destination];
   didLastOutputTerminateLine[destination] = true;
+  try {
+    emit({
+      category: options.outputCategory,
+      text: `${didLastTerminateLine ? '' : '\n'}${message}`,
+    });
+  } catch (e) {
+    console.error('Calva output-sink listener error', e.message);
+  }
   if (destination === 'repl-window') {
     outputWindow.appendLine(`${didLastTerminateLine ? '' : '\n'}${message}`, after);
   } else if (destination === 'output-channel') {
@@ -226,6 +275,11 @@ function appendClojure(
     getOutputPTY().write(`${didLastTerminateLine ? '' : '\n'}${nsInfoLine(destination, options)}`);
     // getOutputPTY().write(`${didLastTerminateLine ? '' : '\n'}`);
     getOutputPTY().write(`${prettyMessage}\n`);
+    if (after) {
+      after(undefined, undefined);
+    }
+  } else if (destination === 'output-view') {
+    appendToReplOutputWebview(options, message);
     if (after) {
       after(undefined, undefined);
     }
@@ -262,6 +316,14 @@ export function appendClojureOther(message: string, after?: AfterAppendCallback)
 }
 
 function append(options: AppendOptions, message: string, after?: AfterAppendCallback) {
+  try {
+    emit({
+      category: options.outputCategory,
+      text: util.stripAnsi(message),
+    });
+  } catch (e) {
+    console.error('Calva output-sink listener error', e.message);
+  }
   const destination = options.destination;
   const didLastTerminateLine = didLastOutputTerminateLine[destination];
   didLastOutputTerminateLine[destination] = util.stripAnsi(message).endsWith('\n');
@@ -286,6 +348,9 @@ function append(options: AppendOptions, message: string, after?: AfterAppendCall
       after(undefined, undefined);
     }
     return;
+  }
+  if (destination === 'output-view') {
+    appendToReplOutputWebview(options, message);
   }
 }
 
@@ -343,7 +408,7 @@ export function appendOtherOut(message: string, after?: AfterAppendCallback) {
 }
 
 /**
- * Appends output without adding a newline at the end.
+ * Appends error output without adding a newline at the end.
  * Use for stderr and other error messages not related to an evaluation
  * (e.g. out of band messages)
  * @param message The message to append
@@ -376,6 +441,9 @@ function appendLine(options: AppendOptions, message: string, after?: AfterAppend
   }
   if (destination === 'terminal') {
     append(options, message + '\r\n', after);
+  }
+  if (destination === 'output-view') {
+    appendToReplOutputWebview(options, '\n\n' + message);
   }
 }
 
@@ -451,4 +519,59 @@ export function appendLineOtherErr(message: string, after?: AfterAppendCallback)
 export function replWindowAppendPrompt(onAppended?: outputWindow.OnAppendedCallback) {
   didLastOutputTerminateLine['output-window'] = true;
   outputWindow.appendPrompt(onAppended);
+}
+
+function formatStacktrace(stacktrace: any[]) {
+  return stacktrace
+    .filter((entry) => {
+      return (
+        !entry.flags.includes('dup') &&
+        !['clojure.lang.RestFn', 'clojure.lang.AFn'].includes(entry.class)
+      );
+    })
+    .map((entry) => {
+      const name = entry.var || entry.name;
+      return `${name} (${entry.file}:${entry.line})`;
+    })
+    .join('\n');
+}
+
+function printStackTrace(stacktrace: any[]) {
+  const evalResultsOutputDestination = getDestinationConfiguration().evalResults;
+  switch (evalResultsOutputDestination) {
+    case 'repl-window':
+      outputWindow.printLastStacktrace();
+      replWindowAppendPrompt();
+      break;
+    case 'output-view':
+      appendStackTraceToReplOutputWebview(stacktrace);
+      break;
+    case 'output-channel':
+      outputChannel.appendLine('');
+      outputChannel.appendLine(formatStacktrace(stacktrace));
+      break;
+    case 'terminal':
+      getOutputPTY().write('\n' + formatStacktrace(stacktrace) + '\n');
+      break;
+    default:
+      console.error(
+        'Printing the last stacktrace is not supported for the configured results output destination:',
+        evalResultsOutputDestination
+      );
+      break;
+  }
+}
+
+export function printLastStacktrace() {
+  const session = replSession.getSession();
+  session
+    .stacktrace()
+    .then((stacktrace) => {
+      if (stacktrace.stacktrace) {
+        printStackTrace(stacktrace.stacktrace);
+      }
+    })
+    .catch((e) => {
+      console.error(`Failed fetching stacktrace: ${e.message}`);
+    });
 }

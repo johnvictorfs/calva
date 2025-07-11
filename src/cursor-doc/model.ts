@@ -2,7 +2,7 @@ import { Scanner, Token, ScannerState } from './clojure-lexer';
 import { LispTokenCursor } from './token-cursor';
 import { deepEqual as equal } from '../util/object';
 import { isNumber, isUndefined } from 'lodash';
-import { TextDocument, Selection } from 'vscode';
+import { TextDocument, Selection, TextEditorEdit } from 'vscode';
 import _ = require('lodash');
 
 let scanner: Scanner;
@@ -241,9 +241,9 @@ export class ModelEditSelection {
 
 export type ModelEditOptions = {
   undoStopBefore?: boolean;
-  formatDepth?: number;
   skipFormat?: boolean;
   selections?: ModelEditSelection[];
+  builder?: TextEditorEdit;
 };
 
 export interface EditableModel {
@@ -256,6 +256,15 @@ export interface EditableModel {
    * @param edits
    */
   edit: (edits: ModelEdit<ModelEditFunction>[], options: ModelEditOptions) => Thenable<boolean>;
+
+  /**
+   * Performs a model edit batch "synchronously",
+   * using the TextEditorEdit at the 'builder' key of options if applicable.
+   * For some EditableModel's these are performed as one atomic set of edits.
+   * @param edits What to do
+   * @param options The TextEditorEdit (at the 'builder' key, if applicable) and other options
+   */
+  editNow: (edits: ModelEdit<ModelEditFunction>[], options: ModelEditOptions) => void;
 
   getText: (start: number, end: number, mustBeWithin?: boolean) => string;
   getLineText: (line: number) => string;
@@ -275,9 +284,69 @@ export interface EditableDocument {
   getTokenCursor: (offset?: number, previous?: boolean) => LispTokenCursor;
   insertString: (text: string) => void;
   getSelectionText: () => string;
-  delete: () => Thenable<boolean>;
-  backspace: () => Thenable<boolean>;
 }
+
+// An editing transaction - array of ModelEdit - shifts the selection(s)
+// to compensate for insertions or deletions to their left.
+// Here we predict how edits will affect selections.
+export const selectionsAfterEdits = (function () {
+  // 'Decoders' of ModelEdit:
+  //  [threshold, point, change-in-size]
+  const decodeChangeRange = function (edit): [number, number, number] {
+    const delta = edit.args[2].length - (edit.args[1] - edit.args[0]);
+    const inserted = delta > 0 ? edit.args[2] : undefined;
+    const lastInsertedChar = !inserted || inserted == '' ? '' : inserted[inserted.length - 1];
+    const point = edit.args[0];
+    const threshold = ['(', '[', '{', '#{', ' '].includes(lastInsertedChar) ? point - 1 : point;
+    return [threshold, point, delta];
+  };
+  const decodeDeleteRange = function (edit): [number, number, number] {
+    return [edit.args[0], edit.args[0], 0 - edit.args[1]];
+  };
+  const decodeInsertString = function (edit): [number, number, number] {
+    return [edit.args[0] - 1, edit.args[0] + edit.args[1].length, edit.args[1].length];
+  };
+  const bump = function (n: number, [threshold, point, delta]) {
+    if (n == undefined) {
+      return undefined;
+    } else {
+      return n > threshold ? Math.max(n + delta, point) : n;
+    }
+  };
+  return function (edits: ModelEdit<ModelEditFunction>[], selections: ModelEditSelection[]) {
+    // The ModelEdit array is in order by end-of-doc to start.
+    // Traverse it, bumping selections
+    // according to the growth or shrinkage of each edit.
+    let monotonicallyDecreasing = -1; // check edit order
+    let retSelections: ModelEditSelection[] = [...selections];
+    for (let ic = 0; ic < edits.length; ic++) {
+      const affected: [number, number, number] =
+        edits[ic].editFn == 'deleteRange'
+          ? decodeDeleteRange(edits[ic])
+          : edits[ic].editFn == 'changeRange'
+          ? decodeChangeRange(edits[ic])
+          : decodeInsertString(edits[ic]);
+      const [threshold, point, delta] = affected;
+      if (monotonicallyDecreasing != -1 && point > monotonicallyDecreasing) {
+        console.error(
+          'Edits not back-to-front. Inference of resulting selection might be inaccurate'
+        );
+      }
+      monotonicallyDecreasing = point;
+      if (delta != 0) {
+        retSelections = retSelections.map(function (s: ModelEditSelection) {
+          return new ModelEditSelection(
+            bump(s.end, affected),
+            bump(s.active, affected),
+            bump(s.start, affected),
+            bump(s.end, affected)
+          );
+        });
+      }
+    }
+    return retSelections;
+  };
+})();
 
 /** The underlying model for the REPL readline. */
 export class LineInputModel implements EditableModel {
@@ -527,32 +596,51 @@ export class LineInputModel implements EditableModel {
    */
   edit(edits: ModelEdit<ModelEditFunction>[], options: ModelEditOptions): Thenable<boolean> {
     return new Promise((resolve, reject) => {
-      for (const edit of edits) {
-        switch (edit.editFn) {
-          case 'insertString': {
-            const fn = this.insertString;
-            this.insertString(...(edit.args.slice(0, 4) as Parameters<typeof fn>));
-            break;
-          }
-          case 'changeRange': {
-            const fn = this.changeRange;
-            this.changeRange(...(edit.args.slice(0, 5) as Parameters<typeof fn>));
-            break;
-          }
-          case 'deleteRange': {
-            const fn = this.deleteRange;
-            this.deleteRange(...(edit.args.slice(0, 5) as Parameters<typeof fn>));
-            break;
-          }
-          default:
-            break;
+      this.editTextNow(edits, options);
+      if (this.document) {
+        if (options.selections) {
+          this.document.selections = options.selections;
+        } else {
+          this.document.selections = selectionsAfterEdits(edits, this.document.selections);
         }
-      }
-      if (this.document && options.selections) {
-        this.document.selections = options.selections;
       }
       resolve(true);
     });
+  }
+
+  editNow(edits: ModelEdit<ModelEditFunction>[], options: ModelEditOptions): void {
+    this.editTextNow(edits, options);
+    if (this.document && options.selections) {
+      this.document.selections = options.selections;
+    } else {
+      if (this.document) {
+        this.document.selections = selectionsAfterEdits(edits, this.document.selections);
+      }
+    }
+  }
+
+  editTextNow(edits: ModelEdit<ModelEditFunction>[], options: ModelEditOptions): void {
+    for (const edit of edits) {
+      switch (edit.editFn) {
+        case 'insertString': {
+          const fn = this.insertString;
+          this.insertString(...(edit.args.slice(0, 4) as Parameters<typeof fn>));
+          break;
+        }
+        case 'changeRange': {
+          const fn = this.changeRange;
+          this.changeRange(...(edit.args.slice(0, 5) as Parameters<typeof fn>));
+          break;
+        }
+        case 'deleteRange': {
+          const fn = this.deleteRange;
+          this.deleteRange(...(edit.args.slice(0, 5) as Parameters<typeof fn>));
+          break;
+        }
+        default:
+          break;
+      }
+    }
   }
 
   /**
@@ -572,12 +660,9 @@ export class LineInputModel implements EditableModel {
     text: string,
     oldSelection?: ModelEditRange,
     newSelection?: ModelEditRange
-  ) {
-    const t1 = new Date();
-
+  ): void {
     const startPos = Math.min(start, end);
     const endPos = Math.max(start, end);
-    const deletedText = this.recordingUndo ? this.getText(startPos, endPos) : '';
     const [startLine, startCol] = this.getRowCol(startPos);
     const [endLine, endCol] = this.getRowCol(endPos);
     // extract the lines we will replace
@@ -624,8 +709,6 @@ export class LineInputModel implements EditableModel {
       this.changedLines.add(startLine + i);
       this.markDirty(startLine + i);
     }
-
-    // console.log("Parsing took: ", new Date().valueOf() - t1.valueOf());
   }
 
   /**
@@ -643,9 +726,8 @@ export class LineInputModel implements EditableModel {
     text: string,
     oldSelection?: ModelEditRange,
     newSelection?: ModelEditRange
-  ): number {
-    this.changeRange(offset, offset, text, oldSelection, newSelection);
-    return text.length;
+  ): void {
+    this.changeRange(offset, offset, text);
   }
 
   /**
@@ -662,8 +744,8 @@ export class LineInputModel implements EditableModel {
     count: number,
     oldSelection?: ModelEditRange,
     newSelection?: ModelEditRange
-  ) {
-    this.changeRange(offset, offset + count, '', oldSelection, newSelection);
+  ): void {
+    this.changeRange(offset, offset + count, '');
   }
 
   /** Return the offset of the last character in this model. */
@@ -755,18 +837,4 @@ export class StringDocument implements EditableDocument {
   }
 
   getSelectionText: () => string;
-
-  delete() {
-    const p = this.selections[0].anchor;
-    return this.model.edit([new ModelEdit('deleteRange', [p, 1])], {
-      selections: [new ModelEditSelection(p)],
-    });
-  }
-
-  backspace() {
-    const p = this.selections[0].anchor;
-    return this.model.edit([new ModelEdit('deleteRange', [p - 1, 1])], {
-      selections: [new ModelEditSelection(p - 1)],
-    });
-  }
 }

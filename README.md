@@ -4,7 +4,7 @@
 
 _Distilled from [CIDER](https://cider.mx/)*._
 
-[![#calva chat on Zulip](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://clojurians.zulipchat.com/#narrow/channel/151858-calva)
+[![chat - #clojure](https://img.shields.io/badge/chat-%23calva-db9550?style=for-the-badge&logo=zulip)](https://clojurians.zulipchat.com/#narrow/channel/151858-calva)
 
 Welcome to [Calva](https://marketplace.visualstudio.com/items?itemName=betterthantomorrow.calva), an integrated, REPL powered, development environment for enjoyable and productive [Clojure](https://clojure.org) and [ClojureScript](https://clojurescript.org) programming in [Visual Studio Code](https://code.visualstudio.com). It includes:
 
@@ -167,9 +167,7 @@ Patrons, Gold, and Silver sponsors are also displayed here: https://calva.io/#sp
 
 ### Calva Gold Sponsors
 
-[<img src="https://liftoff.io/wp-content/themes/liftoff/images/logo-blue.png" height="40px" alt="Liftoff"/>](https://liftoff.io)
 [<img src="assets/images/cognitect-logo.jpg" height="40px" alt="Cognitect"/>](https://cognitect.com)
-[<img src="assets/images/thortech-solutions.png" height="40px" alt="ThorTech Solutions"/>](https://www.thortech-solutions.com/)
 
 ### Calva Silver Sponsors
 
@@ -250,8 +248,10 @@ Calva is an open source project with surprisingly many code contributors. We tak
 
 ## Telemetry
 
-If the setting `telemetry.telemetryLevel` is set to `"all"`, Calva will collect some telemetry. It is basically some key events, like that Calva is started, a repl connected, something is evaluated. Currently it is 10 events.
+By default Calva collects some usage info. There are no cookies or anything like that involved. It is a randomly generated identifier per Calva install that is sent along some key events, like that Calva is started, a repl connected, something is evaluated. Currently it is 10 events.
 For an up-to-date, and full, list of events, see: https://github.com/BetterThanTomorrow/calva/blob/published/src/analytics.ts and the calls to that module.
+
+To opt out of this, disable `calva.telemetryEnabled` in settings. For Calva telemetry to be logged, aLso the VS Code setting `telemetry.telemetryLevel` need to be set to `"all"`. 
 
 ## Happy Coding
 
