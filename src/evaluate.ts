@@ -348,40 +348,96 @@ function _currentTopLevelFormText(editor: vscode.TextEditor): getText.SelectionA
  * ```
  */
 function _cleanTypeHints(code: string): string {
-    // Replace s/defn with defn
-    let result = code.replace(/\w+\/defn/, 'defn');
+  // Replace s/defn with defn
+  let result = code.replace(/\w+\/defn/, 'defn');
+  
+  // Remove the return type hint (handles complex types with parentheses)
+  result = result.replace(/:-\s+[^[]+(?=\s*\[)/, '');
+  
+  // Find and clean parameter type hints
+  // Use balanced bracket matching to handle nested brackets correctly
+  const paramStartIndex = result.indexOf('[');
+  if (paramStartIndex !== -1) {
+    let bracketCount = 0;
+    let paramEndIndex = paramStartIndex;
+    
+    for (let i = paramStartIndex; i < result.length; i++) {
+      if (result[i] === '[') bracketCount++;
+      if (result[i] === ']') bracketCount--;
+      if (bracketCount === 0) {
+        paramEndIndex = i;
+        break;
+      }
+    }
+    
+    const fullParamVector = result.substring(paramStartIndex, paramEndIndex + 1);
+    const params = result.substring(paramStartIndex + 1, paramEndIndex);
+    
+    // Remove all type hints from parameters with balanced parentheses handling
+    const cleanedParams = _removeTypeHints(params);
+    result = result.replace(fullParamVector, `[${cleanedParams}]`);
+  }
+  
+  // Clean up whitespace - preserve single spaces but remove excessive whitespace
+  result = result.replace(/\s+/g, ' ').trim();
+  
+  // Add proper formatting around brackets for readability
+  result = result.replace(/\[\s*/, '[');
+  result = result.replace(/\s*\]/, ']');
 
-    // Remove the return type hint
-    result = result.replace(/:-\s+\S+(?=\s*\[)/, '');
+  return result;
+}
 
-    // Find and clean parameter type hints
-    // Use balanced bracket matching to handle nested brackets correctly
-    const paramStartIndex = result.indexOf('[');
-    if (paramStartIndex !== -1) {
-      let bracketCount = 0;
-      let paramEndIndex = paramStartIndex;
-
-      for (let i = paramStartIndex; i < result.length; i++) {
-        if (result[i] === '[') bracketCount++;
-        if (result[i] === ']') bracketCount--;
-        if (bracketCount === 0) {
-          paramEndIndex = i;
-          break;
+function _removeTypeHints(text: string): string {
+  let result = '';
+  let i = 0;
+  
+  while (i < text.length) {
+    // Look for type hint pattern ":- "
+    if (text.substring(i, i + 3) === ':- ') {
+      // Skip the ":- " part
+      i += 3;
+      
+      // Skip whitespace
+      while (i < text.length && /\s/.test(text[i])) {
+        i++;
+      }
+      
+      // Now we need to skip the type hint, which could contain balanced parentheses
+      if (i < text.length && text[i] === '(') {
+        // Handle balanced parentheses
+        let parenCount = 0;
+        while (i < text.length) {
+          if (text[i] === '(') parenCount++;
+          if (text[i] === ')') parenCount--;
+          i++;
+          if (parenCount === 0) break;
+        }
+      } else {
+        // Handle simple type hints (no parentheses)
+        while (i < text.length && !/\s/.test(text[i])) {
+          i++;
         }
       }
-
-      const fullParamVector = result.substring(paramStartIndex, paramEndIndex + 1);
-      const params = result.substring(paramStartIndex + 1, paramEndIndex);
-
-      // Remove all type hints from parameters while preserving params
-      const cleanedParams = params.replace(/:-\s+\S+/g, '');
-      result = result.replace(fullParamVector, `[${cleanedParams}]`);
+      
+      // Skip any trailing whitespace after the type hint, but preserve parameter separation
+      while (i < text.length && /\s/.test(text[i])) {
+        i++;
+      }
+      
+      // Add a single space for parameter separation if we're not at the end
+      if (i < text.length && result.length > 0 && !result.endsWith(' ')) {
+        result += ' ';
+      }
+    } else {
+      // Not a type hint, keep the character
+      result += text[i];
+      i++;
     }
-
-    // Clean up whitespace
-    result = result.replace(/\s+/g, ' ').trim();
-
-    return result;
+  }
+  
+  // Clean up any extra spaces
+  return result.replace(/\s+/g, ' ').trim();
 }
 
 function _currentEnclosingFormText(editor: vscode.TextEditor): getText.SelectionAndText {
