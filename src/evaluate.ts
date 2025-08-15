@@ -348,25 +348,40 @@ function _currentTopLevelFormText(editor: vscode.TextEditor): getText.SelectionA
  * ```
  */
 function _cleanTypeHints(code: string): string {
-  // Step 1: Replace s/defn with defn
-  let result = code.replace(/\w+\/defn/, 'defn');
-  
-  // Step 2: Remove the return type hint
-  result = result.replace(/:-\s+\S+(?=\s*\[)/, '');
-  
-  // Step 3: Find and clean parameter type hints
-  const paramVectorMatch = result.match(/\[([\s\S]*?)\]/);
-  if (paramVectorMatch) {
-    const params = paramVectorMatch[1];
-    // Remove all type hints from parameters while preserving params
-    const cleanedParams = params.replace(/:-\s+\S+/g, '');
-    result = result.replace(paramVectorMatch[0], `[${cleanedParams}]`);
-  }
-  
-  // Step 4: Clean up whitespace
-  result = result.replace(/\s+/g, ' ').trim();
+    // Replace s/defn with defn
+    let result = code.replace(/\w+\/defn/, 'defn');
 
-  return result;
+    // Remove the return type hint
+    result = result.replace(/:-\s+\S+(?=\s*\[)/, '');
+
+    // Find and clean parameter type hints
+    // Use balanced bracket matching to handle nested brackets correctly
+    const paramStartIndex = result.indexOf('[');
+    if (paramStartIndex !== -1) {
+      let bracketCount = 0;
+      let paramEndIndex = paramStartIndex;
+
+      for (let i = paramStartIndex; i < result.length; i++) {
+        if (result[i] === '[') bracketCount++;
+        if (result[i] === ']') bracketCount--;
+        if (bracketCount === 0) {
+          paramEndIndex = i;
+          break;
+        }
+      }
+
+      const fullParamVector = result.substring(paramStartIndex, paramEndIndex + 1);
+      const params = result.substring(paramStartIndex + 1, paramEndIndex);
+
+      // Remove all type hints from parameters while preserving params
+      const cleanedParams = params.replace(/:-\s+\S+/g, '');
+      result = result.replace(fullParamVector, `[${cleanedParams}]`);
+    }
+
+    // Clean up whitespace
+    result = result.replace(/\s+/g, ' ').trim();
+
+    return result;
 }
 
 function _currentEnclosingFormText(editor: vscode.TextEditor): getText.SelectionAndText {
