@@ -4,6 +4,94 @@ Changes to Calva.
 
 ## [Unreleased]
 
+## [2.0.539] - 2025-10-28
+
+- [Use latest version of libs for Jack-in, if no specific version was set by the user](https://github.com/BetterThanTomorrow/calva/issues/2959)
+
+  Previous default versions:
+  - `nrepl`: 1.3.1
+  - `cider-nrepl`: 0.55.4
+  - `cider/piggieback`: 0.6.0
+
+## [2.0.538] - 2025-10-19
+
+- Fix: [Semantic tokens fail on some input with ignored forms](https://github.com/BetterThanTomorrow/calva/issues/2956)
+
+## [2.0.537] - 2025-10-15
+
+- [Add "Wrap Around #{}" paredit command](https://github.com/BetterThanTomorrow/calva/issues/2949)
+- Fix: [Debug freezes when using Step Into](https://github.com/BetterThanTomorrow/calva/issues/2924)
+
+## [2.0.536] - 2025-09-28
+
+- Fix: [Terminal output destination normalizes `\r` to `\r\n`, breaking TUI output using `\r` for cursor return only](https://github.com/BetterThanTomorrow/calva/issues/2945)
+
+## [2.0.535] - 2025-09-28
+
+- [Make API evaluations show in the Calva output destination](https://github.com/BetterThanTomorrow/calva/issues/2942)
+- [Configure different keyboard shortcuts for different REPL connect sequences ](https://github.com/BetterThanTomorrow/calva/issues/2940)
+- Bump deps.clj.jar to v1.12.3.1577
+
+## [2.0.534] - 2025-09-24
+
+- Re-enable shadow-cljs runtimes connection updates...
+
+## [2.0.533] - 2025-09-24
+
+- Fix: [Calva registers for shadow-cljs runtime connects more than once per server connection](https://github.com/BetterThanTomorrow/calva/pull/2937)
+  - Also removes support for runtime connection updates for shadow-cljs < 3.2.1
+
+## [2.0.532] - 2025-09-24
+
+- [Prevent calva from breaking other debugging session](https://github.com/BetterThanTomorrow/calva/pull/2934)
+
+## [2.0.531] - 2025-09-23
+
+- [Make shadow-remote notifications register more reliably](https://github.com/BetterThanTomorrow/calva/issues/2932)
+- Bump deps.clj.jar to v1.12.2.1571
+
+## [2.0.530] - 2025-09-22
+
+- [Make shadow-cljs runtimes status update with connection status](https://github.com/BetterThanTomorrow/calva/issues/2928)
+
+## [2.0.529] - 2025-09-21
+
+- Fix: [No `node-repl` and `browser-repl` builds available with **deps.edn + shadow-cljs** project types](https://github.com/BetterThanTomorrow/calva/issues/2929)
+
+## [2.0.528] - 2025-09-18
+
+- Fix: [shadow-cljs runtimes for Node get not description at all](https://github.com/BetterThanTomorrow/calva/issues/2926)
+
+## [2.0.527] - 2025-09-17
+
+- [Add command for selecting shadow-cljs runtime to connect to](https://github.com/BetterThanTomorrow/calva/issues/2923)
+
+## [2.0.526] - 2025-09-11
+
+- [Make delete word backwards more precise and intuitive when the cursor is in the whitespace after a line comment](https://github.com/BetterThanTomorrow/calva/issues/2917)
+- [remove duplicate paredit definition in Backward to List Start keybinding](https://github.com/BetterThanTomorrow/calva/issues/2916)
+
+## [2.0.525] - 2025-08-30
+
+- Bump deps.clj.jar to v1.12.2.1565
+- Fix: [delete previous word incongruence between Calva and plain text in comments](https://github.com/BetterThanTomorrow/calva/issues/2912)
+
+## [2.0.524] - 2025-08-16
+
+- Bump deps.clj.jar to v1.12.1.1561
+
+## [2.0.523] - 2025-07-14
+
+- Fix: [[doc] Unneeded send-off function call in sample code](https://github.com/BetterThanTomorrow/calva/issues/2888)
+- Fix: [Ctrl+Home shortcut has no title](https://github.com/BetterThanTomorrow/calva/issues/2890)
+- [Remove content reloading from output view](https://github.com/BetterThanTomorrow/calva/issues/2894)
+- Fix: [Output view syntax highlighting breaks when it's dragged into or out of main VS Code window](https://github.com/BetterThanTomorrow/calva/issues/2895)
+
+## [2.0.522] - 2025-07-12
+
+- Fix: [After VS Code reload a new separate output view is opened on connect when one is already open](https://github.com/BetterThanTomorrow/calva/issues/2883)
+- Fix: [Output view sometimes opens with broken code highlighting](https://github.com/BetterThanTomorrow/calva/issues/2870)
+
 ## [2.0.521] - 2025-07-09
 
 - [Reload contents of output view when VS Code window is reloaded](https://github.com/BetterThanTomorrow/calva/issues/2827)

@@ -233,9 +233,10 @@ class CalvaDebugSession extends LoggingDebugSession {
     request?: DebugProtocol.Request
   ): Promise<void> {
     const debugResponse = getStateValue(DEBUG_RESPONSE_KEY);
-    const uri = debugResponse.file.startsWith('jar:')
-      ? vscode.Uri.parse(debugResponse.file)
-      : vscode.Uri.file(debugResponse.file);
+    const uri =
+      debugResponse.file.startsWith('jar:') || debugResponse.file.startsWith('file:')
+        ? vscode.Uri.parse(debugResponse.file)
+        : vscode.Uri.file(debugResponse.file);
     const document = await vscode.workspace.openTextDocument(uri);
     const positionLine = convertOneBasedToZeroBased(debugResponse.line);
     const positionColumn = convertOneBasedToZeroBased(debugResponse.column);
@@ -505,6 +506,10 @@ function handleNeedDebugInput(response: any): void {
 }
 
 debug.onDidStartDebugSession((session) => {
+  if (session.type != CALVA_DEBUG_CONFIGURATION.type) {
+    return;
+  }
+
   // We only start debugger sessions when a breakpoint is hit
   void session.customRequest(REQUESTS.SEND_STOPPED_EVENT, {
     reason: 'breakpoint',

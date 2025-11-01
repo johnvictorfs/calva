@@ -35,7 +35,6 @@ import {
   setStateValue,
   initializeCljs,
   clearReplOutputView,
-  registerOutputViewWebviewSerializer,
   showReplOutputWebviewPanel,
 } from '../out/cljs-lib/cljs-lib';
 import * as edit from './edit';
@@ -44,6 +43,7 @@ import * as converters from './converters';
 import * as joyride from './joyride';
 import * as api from './api/index';
 import * as depsClj from './nrepl/deps-clj';
+import { refreshJackInDependencyVersions } from './nrepl/jack-in-dependency-versions';
 import * as clojureDocs from './clojuredocs';
 import { capitalize } from './utilities';
 import * as overrides from './overrides';
@@ -52,6 +52,7 @@ import * as fiddleFiles from './fiddle-files';
 import * as flareHandler from './flare-handler';
 import * as output from './results-output/output';
 import * as inspector from './providers/inspector';
+import * as shadowRuntime from './shadow-cljs-runtime';
 
 function onDidChangeEditorOrSelection(editor: vscode.TextEditor) {
   replHistory.setReplHistoryCommandsActiveContext(editor);
@@ -88,8 +89,6 @@ async function activate(context: vscode.ExtensionContext) {
   // because requiring the vscode API poses issues with being able to test the cljs lib.
   // We cannot run unit tests on code that imports the vscode API, because it's only available at runtime.
   initializeCljs(vscode, context);
-
-  registerOutputViewWebviewSerializer();
 
   initializeState();
   state.setExtensionContext(context);
@@ -188,7 +187,9 @@ async function activate(context: vscode.ExtensionContext) {
     );
   }
 
-  void depsClj.downloadDepsClj(context.extensionPath);
+  void depsClj.downloadDepsClj(context.extensionPath).finally(() => {
+    void refreshJackInDependencyVersions();
+  });
 
   if (cljKondoExtension) {
     void vscode.window.showWarningMessage(
@@ -329,6 +330,7 @@ async function activate(context: vscode.ExtensionContext) {
       return drams.createAndOpenDram(context, title, src);
     },
     switchCljsBuild: connector.switchCljsBuild,
+    selectShadowCljsRuntime: shadowRuntime.selectShadowCljsRuntimeCommand,
     tapCurrentTopLevelForm: () =>
       snippets.evaluateCustomCodeSnippetCommand('(tap> $top-level-form)'),
     tapSelection: () => snippets.evaluateCustomCodeSnippetCommand('(tap> $current-form)'),

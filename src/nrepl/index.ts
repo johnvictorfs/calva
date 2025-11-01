@@ -20,6 +20,7 @@ import { getConfig } from '../config';
 import { log, Direction } from './logging';
 import * as string from '../util/string';
 import * as output from '../results-output/output';
+import { handleShadowRemoteMessage } from '../shadow-cljs-runtime';
 
 function hasStatus(res: any, status: string): boolean {
   return res.status && res.status.indexOf(status) > -1;
@@ -293,6 +294,11 @@ export class NReplSession {
   }
 
   _defaultMessageHandler(msgData: any) {
+    if (msgData.op === 'shadow-remote-msg') {
+      void handleShadowRemoteMessage(msgData);
+      return;
+    }
+
     if (msgData['repl-type']) {
       this.replType = msgData['repl-type'];
     }
@@ -969,6 +975,52 @@ export class NReplSession {
         this.client.write(msg);
       } else {
         resolve(undefined);
+      }
+    });
+  }
+
+  shadowCljsRemoteInit() {
+    return new Promise<any>((resolve, reject) => {
+      const id = this.client.nextId;
+      const msg = {
+        op: 'shadow-remote-init',
+        id: id,
+        session: this.sessionId,
+        'data-type': 'edn',
+      };
+      if (this.supports(msg.op)) {
+        this.messageHandlers[id] = (msg) => {
+          resolve(msg);
+          return true;
+        };
+        this.client.write(msg);
+      } else {
+        // shadow-cljs versions that do not `describe` `shadow-remote-init` will not send a
+        // response signaling it is processed, we skip initializing
+        resolve(null);
+      }
+    });
+  }
+
+  shadowCljsRemoteRegisterNotify() {
+    return new Promise<any>((resolve, reject) => {
+      const id = this.client.nextId;
+      const msg = {
+        op: 'shadow-remote-msg',
+        id: id,
+        session: this.sessionId,
+        data: '{:op :request-clients :notify true :query [:eq :type :runtime]}',
+      };
+      if (this.supports(msg.op)) {
+        this.messageHandlers[id] = (msg) => {
+          resolve(msg);
+          return true;
+        };
+        this.client.write(msg);
+      } else {
+        // shadow-cljs versions that do not `describe` `shadow-remote-init` will not send a
+        // response signaling it is processed, we skip subscribing
+        resolve(null);
       }
     });
   }

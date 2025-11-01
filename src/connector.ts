@@ -7,8 +7,10 @@ import * as open from 'open';
 import status from './status';
 import * as projectTypes from './nrepl/project-types';
 import { NReplClient, NReplSession } from './nrepl';
+import * as shadowCljsRuntime from './shadow-cljs-runtime';
 import {
   CljsTypeConfig,
+  CljsTypes,
   ReplConnectSequence,
   getDefaultCljsType,
   askForConnectSequence,
@@ -73,6 +75,7 @@ async function connectToHost(hostname: string, port: number, connectSequence: Re
   let cljSession: NReplSession;
 
   util.setConnectingState(true);
+  void vscode.commands.executeCommand('setContext', 'calva:connectSequence', connectSequence.name);
   status.update();
   try {
     output.appendLineOtherOut('Hooking up nREPL sessions ...');
@@ -153,6 +156,7 @@ async function connectToHost(hostname: string, port: number, connectSequence: Re
         const cljsType: CljsTypeConfig = isBuiltinType
           ? getDefaultCljsType(connectSequence.cljsType as string)
           : (connectSequence.cljsType as CljsTypeConfig);
+
         translatedReplType = createCLJSReplType(
           cljsType,
           projectTypes.getCljsTypeName(connectSequence),
@@ -169,9 +173,13 @@ async function connectToHost(hostname: string, port: number, connectSequence: Re
       if (cljsSession) {
         await setUpCljsRepl(cljsSession, cljsBuild);
       }
+      if (isShadowCljsReplType(connectSequence.cljsType)) {
+        await shadowCljsRuntime.initializeShadowRemoteNotifications();
+      }
     } catch (e) {
       output.appendLineOtherErr('Error while connecting cljs REPL: ' + e);
     }
+
     status.update();
   } catch (e) {
     return cleanUpAfterError(e);
@@ -413,10 +421,15 @@ function createCLJSReplType(
         useDefaultBuild = false;
       } else {
         if (typeof initCode === 'object' || initCode.includes('%BUILD%')) {
+          const allBuilds = await figwheelOrShadowBuilds(cljsTypeName);
+          const availableBuilds = startedBuilds
+            ? [
+                ...startedBuilds,
+                ...allBuilds.filter((b) => ['node-repl', 'browser-repl'].includes(b)),
+              ]
+            : allBuilds;
           const buildItem = await util.quickPickSingle({
-            values: startedBuilds
-              ? startedBuilds.map((a) => ({ label: a }))
-              : (await figwheelOrShadowBuilds(cljsTypeName)).map((a) => ({ label: a })),
+            values: availableBuilds.map((a) => ({ label: a })),
             placeHolder: 'Select which build to connect to',
             saveAs: `${state.getProjectRootUri().toString()}/${cljsTypeName.replace(
               ' ',
@@ -505,7 +518,11 @@ function createCLJSReplType(
       if (!isConnectCodeEvaluatedSuccessfully || !isShadowCljsReplType(cljsType)) {
         return isConnectCodeEvaluatedSuccessfully;
       }
-      return waitForShadowCljsRuntimes();
+      const runtimesConnected = await waitForShadowCljsRuntimes();
+      if (runtimesConnected) {
+        await shadowCljsRuntime.detectInitialRuntime();
+      }
+      return runtimesConnected;
     } else {
       return true;
     }
@@ -602,12 +619,16 @@ function createCLJSReplType(
   return replType;
 }
 
-function isShadowCljsReplType(cljsType: CljsTypeConfig) {
-  return (
-    (typeof cljsType === 'string' && cljsType === 'shadow-cljs') ||
-    cljsType.name === 'shadow-cljs' ||
-    cljsType.dependsOn === 'shadow-cljs'
-  );
+function isShadowCljsReplType(cljsType: CljsTypeConfig | CljsTypes): boolean {
+  if (typeof cljsType === 'string') {
+    return cljsType === 'shadow-cljs';
+  }
+
+  if (typeof cljsType === 'object' && cljsType !== null) {
+    return cljsType.name === 'shadow-cljs' || cljsType.dependsOn === 'shadow-cljs';
+  }
+
+  return false;
 }
 
 async function makeCljsSessionClone(session, repl: ReplType, projectTypeName: string) {
