@@ -66,7 +66,9 @@ function findMatchingBracket(text: string, startIndex: number): number {
 
 /** Normalize whitespace in code */
 function normalizeWhitespace(text: string): string {
-  return text.replace(/\s+/g, ' ').replace(/\[\s*/, '[').replace(/\s*\]/, ']').trim();
+  // Remove comments first (they start with ; and go to end of line)
+  const withoutComments = text.replace(/;[^\n]*/g, '');
+  return withoutComments.replace(/\s+/g, ' ').replace(/\[\s*/, '[').replace(/\s*\]/, ']').trim();
 }
 
 /**
